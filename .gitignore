@@ -1,2 +1,17 @@
 # Ignore environment variables file
 .env
+
+# Ignore virtual environment
+env/
+.venv/
+venv/
+
+# Ignore Python-specific files
+__pycache__/
+*.pyc
+
+# Ignore configuration file
+config.json
+
+# screenshots
+*.png

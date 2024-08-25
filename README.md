@@ -1,44 +1,53 @@
-Description
-This script automatically logs into your Freedom account and triggers a blocking session. It uses the default time configured in your dashboard, which you can change by logging in manually if needed.
+# Freedom Website Blocker Script
 
-Notes
-Default Time Setting: The script triggers a session using the default time configured in your Freedom dashboard. You can modify this time by logging into the dashboard directly.
+This script automates the process of setting up a blocking session on the Freedom platform using Selenium WebDriver. The script allows you to configure the blocklists, devices, and session duration, and then optionally start the session immediately.
 
-Element Selection: The script interacts with specific elements under the "Interacting with page elements" section, which are dependent on your account setup. These elements select the options under "Block these distractions:" and "On these devices:". The elements have been selected using Katalon Recorder, so you might need to adjust them based on your particular setup.
+## Features
 
-Setup Instructions
-1. Clone the Repository
-Clone this repository to your local machine:
+- **Automated Login**: Logs into the Freedom platform using credentials stored in an environment file.
+- **Blocklist Selection**: Allows you to select the blocklists you want to apply during the session.
+- **Device Selection**: Allows you to select the devices that will be affected by the block session.
+- **Session Duration**: Configure the length of the blocking session.
+- **Configuration Persistence**: Saves your selected blocklists, devices, and duration to a configuration file (`config.json`) for easy reuse.
+- **Immediate Session Start**: Option to start the session immediately after configuration.
 
-bash
-Copy code
+## Prerequisites
+
+- Python 3.x
+- Selenium
+- WebDriver Manager
+- A Freedom account
+
+## Setup
+
+1. **Clone the repository**:
+    ```bash
+    git clone https://github.com/yourusername/freedom-website-blocker.git
+    cd freedom-website-blocker
+    ```
+
+2. **Set up a virtual environment**:
+    ```bash
+    python -m venv env
+    source env/bin/activate  # On Windows use `env\Scripts\activate`
+    ```
+
+3. **Install dependencies**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. **Create a `.env` file** in the project root and add your Freedom credentials:
+    ```plaintext
+    USERNAME=your_email@example.com
+    PASSWORD=your_password
+    ```
+
+## Usage
+
+### Initial Configuration and Running
+
+To configure the blocklists, devices, and duration, and optionally start the session immediately:
+
 ```bash
-git clone https://github.com/yourusername/freedom-blocking-session-automation.git
-```
-2. Set Up the Environment
-This project uses environment variables to manage sensitive information like your Freedom username and password.
-
-Create a .env file:
-
-Copy the provided .env.example file to .env:
-bash
-Copy code
-cp .env.example .env
-Open the .env file and fill in your Freedom account credentials.
-Install Dependencies:
-
-Use pip to install the necessary Python packages:
-bash
-Copy code
-pip install -r requirements.txt
-3. Run the Script
-To execute the script, use the following command:
-
-```python freedom_headless_login.py
-```
-Dependencies
-Selenium: Used to automate browser interactions.
-webdriver-manager: Automatically manages the ChromeDriver installation.
-python-dotenv: Loads environment variables from a .env file.
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
+python run_freedom_block.py --reconfigure
