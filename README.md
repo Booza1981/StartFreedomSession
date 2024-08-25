@@ -1,4 +1,4 @@
-# Freedom Website Blocker Script
+# Freedom Website Blocker Session Start Script
 
 This script automates the process of setting up a blocking session on the Freedom platform using Selenium WebDriver. The script allows you to configure the blocklists, devices, and session duration, and then optionally start the session immediately.
 
@@ -22,8 +22,8 @@ This script automates the process of setting up a blocking session on the Freedo
 
 1. **Clone the repository**:
     ```bash
-    git clone https://github.com/yourusername/freedom-website-blocker.git
-    cd freedom-website-blocker
+    git clone https://github.com/Booza1981/StartFreedomSession.git
+    cd StartFreedomSession
     ```
 
 2. **Set up a virtual environment**:
