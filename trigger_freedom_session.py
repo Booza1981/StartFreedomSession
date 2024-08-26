@@ -128,9 +128,10 @@ def set_duration(driver, total_minutes):
         driver.quit()
         exit(1)
 
-    print("Setting session duration...")
     hours = total_minutes // 60
     minutes = total_minutes % 60
+
+    print(f"Setting session duration: {hours} hours and {minutes} minutes.")
 
     hours_input = driver.find_element(By.ID, "duration-hours")
     minutes_input = driver.find_element(By.ID, "duration-minutes")
@@ -140,6 +141,7 @@ def set_duration(driver, total_minutes):
     
     minutes_input.clear()
     minutes_input.send_keys(str(minutes))
+        
 
 def run_configuration_setup(driver, config):
     
