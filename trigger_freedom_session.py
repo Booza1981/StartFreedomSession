@@ -79,6 +79,7 @@ def login_to_freedom(driver):
     driver.find_element(By.ID, "session_password").send_keys(password)
     
     print("Submitting login form...")
+    driver.save_screenshot('screenshot.png')
     driver.find_element(By.ID, "login-form").submit()
 
 def gather_selection(driver, config, selection_type, container):
@@ -219,5 +220,7 @@ try:
 
 except Exception as e:
     print(f"An error occurred: {e}")
+    import traceback
+    traceback.print_exc()
 finally:
     driver.quit()
