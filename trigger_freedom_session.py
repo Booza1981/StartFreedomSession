@@ -142,8 +142,6 @@ def set_duration(driver, total_minutes):
     minutes_input.send_keys(str(minutes))
 
 def run_configuration_setup(driver, config):
-    """Run the configuration setup process."""
-    login_to_freedom(driver)
     
     # Blocklist selection
     blocklist_div = WebDriverWait(driver, 30).until(
