@@ -40,8 +40,8 @@ options = webdriver.ChromeOptions()
 options.add_argument("--headless")  # Run in headless mode (no UI)
 options.add_argument("--disable-gpu")  # Disable GPU hardware acceleration, recommended for headless mode
 options.add_argument("--window-size=1920x1080")  # Set window size to avoid element visibility issues
-# options.add_argument("--no-sandbox")  # Required if running as root user (not generally recommended)
-# options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems in Docker
+options.add_argument("--no-sandbox")  # Required if running as root user (not generally recommended)
+options.add_argument("--disable-dev-shm-usage")  # Overcome limited resource problems in Docker
 options.add_argument("--log-level=3")  # Suppress console output (3 = FATAL)
 
 # Initialize WebDriver
