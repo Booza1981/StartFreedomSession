@@ -16,17 +16,7 @@ load_dotenv()
 username = os.getenv('USERNAME')
 password = os.getenv('PASSWORD')
 
-# Configuration file path
-config_file_path = 'config.json'
 
-if os.path.exists(config_file_path):
-    try:
-        config = load_configuration()
-    except json.JSONDecodeError as e:
-        print(f"Error loading configuration file: {e}")
-        config = {}
-else:
-    config = {}
 
 
 # Argument parser setup
@@ -203,6 +193,20 @@ def run_configuration_setup(driver, config):
         exit(0)
 
 # Main Execution Logic
+
+# Configuration file path
+config_file_path = 'config.json'
+
+if os.path.exists(config_file_path):
+    try:
+        config = load_configuration()
+    except json.JSONDecodeError as e:
+        print(f"Error loading configuration file: {e}")
+        config = {}
+else:
+    config = {}
+
+
 try:
     if login_to_freedom(driver):
         print("Proceeding with selecting blocklists and devices...")
