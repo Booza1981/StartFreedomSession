@@ -79,8 +79,29 @@ def login_to_freedom(driver):
     driver.find_element(By.ID, "session_password").send_keys(password)
     
     print("Submitting login form...")
-    driver.save_screenshot('screenshot.png')
     driver.find_element(By.ID, "login-form").submit()
+    
+    # Add a test to confirm successful login by checking the blocklist div
+    try:
+        # Wait for the blocklist div to appear as a sign of successful login
+        blocklist_div = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, 'blocklist-checklist'))
+        )
+        print("Login successful.")
+        return True
+    except Exception as e:
+        print(f"Login failed: {e}")
+
+        # Optionally, check for an error message on the login page
+        try:
+            error_message = driver.find_element(By.CLASS_NAME, "error-message-class").text  # Replace with actual class or ID if applicable
+            print(f"Error message displayed: {error_message}")
+        except:
+            print("No specific error message found.")
+        
+        return False
+
+
 
 def gather_selection(driver, config, selection_type, container):
     """Gather and select items such as blocklists or devices."""
@@ -183,40 +204,44 @@ def run_configuration_setup(driver, config):
 
 # Main Execution Logic
 try:
-    # Check for existing configuration
-    if os.path.exists(config_file_path) and not args.reconfigure and not args.adjust_time:
-        config = load_configuration()
-        # If config exists and no reconfiguration is requested, log in and start session
-        login_to_freedom(driver)
+    if login_to_freedom(driver):
+        print("Proceeding with selecting blocklists and devices...")
 
-        # Select blocklists
-        blocklist_div = driver.find_element(By.CLASS_NAME, 'blocklist-checklist')
-        for label in blocklist_div.find_elements(By.TAG_NAME, 'label'):
-            if label.text in config['blocklists']:
-                label.click()
+        # Check for existing configuration
+        if os.path.exists(config_file_path) and not args.reconfigure and not args.adjust_time:
 
-        # Select devices
-        try:
-            print("Locating device checklist for final execution...")
-            device_div = blocklist_div.find_element(By.XPATH, "following-sibling::div[@class='checklist']")
-            for label in device_div.find_elements(By.TAG_NAME, "label"):
-                if label.text in config['devices']:
+            # Select blocklists
+            blocklist_div = driver.find_element(By.CLASS_NAME, 'blocklist-checklist')
+            for label in blocklist_div.find_elements(By.TAG_NAME, 'label'):
+                if label.text in config['blocklists']:
                     label.click()
-        except Exception as e:
-            print(f"An error occurred during device selection: {e}")
-            driver.quit()
-            exit(1)
 
-        # Set the duration
-        set_duration(driver, config['duration'])
+            # Select devices
+            try:
+                print("Locating device checklist for final execution...")
+                device_div = blocklist_div.find_element(By.XPATH, "following-sibling::div[@class='checklist']")
+                for label in device_div.find_elements(By.TAG_NAME, "label"):
+                    if label.text in config['devices']:
+                        label.click()
+            except Exception as e:
+                print(f"An error occurred during device selection: {e}")
+                driver.quit()
+                exit(1)
 
-        # Submit the form if not already started
-        print("Submitting the session setup form...")
-        driver.find_element(By.XPATH, "//button[@type='submit']").click()
-        print("Session has been successfully started.")
-    
+            # Set the duration
+            set_duration(driver, config['duration'])
+
+            # Submit the form if not already started
+            print("Submitting the session setup form...")
+            driver.find_element(By.XPATH, "//button[@type='submit']").click()
+            print("Session has been successfully started.")
+        
+        else:
+            run_configuration_setup(driver, config)
     else:
-        run_configuration_setup(driver, config)
+        print("Terminating script due to failed login.")
+        driver.quit()
+        exit(1)
 
 except Exception as e:
     print(f"An error occurred: {e}")
