@@ -19,6 +19,16 @@ password = os.getenv('PASSWORD')
 # Configuration file path
 config_file_path = 'config.json'
 
+if os.path.exists(config_file_path):
+    try:
+        config = load_configuration()
+    except json.JSONDecodeError as e:
+        print(f"Error loading configuration file: {e}")
+        config = {}
+else:
+    config = {}
+
+
 # Argument parser setup
 parser = argparse.ArgumentParser(description="Freedom Blocking Script")
 parser.add_argument('--reconfigure', action='store_true', help="Reconfigure blocklists, devices, and duration.")
@@ -36,6 +46,7 @@ options.add_argument("--log-level=3")  # Suppress console output (3 = FATAL)
 
 # Initialize WebDriver
 service = Service(ChromeDriverManager().install())
+print(service.path)
 driver = webdriver.Chrome(service=service, options=options)
 driver.implicitly_wait(10)
 
@@ -202,6 +213,9 @@ try:
         print("Submitting the session setup form...")
         driver.find_element(By.XPATH, "//button[@type='submit']").click()
         print("Session has been successfully started.")
+    
+    else:
+        run_configuration_setup(driver, config)
 
 except Exception as e:
     print(f"An error occurred: {e}")
