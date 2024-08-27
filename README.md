@@ -50,4 +50,4 @@ This script automates the process of setting up a blocking session on the Freedo
 To configure the blocklists, devices, and duration, and optionally start the session immediately:
 
 ```bash
-python run_freedom_block.py --reconfigure
+python trigger_freedom_session.py --reconfigure

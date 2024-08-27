@@ -16,8 +16,11 @@ load_dotenv()
 username = os.getenv('USERNAME')
 password = os.getenv('PASSWORD')
 
+# Get directory where script is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
-
+# Configuration file path, can be set via environment variable or defaults to 'config.json'
+config_file_path = os.path.join(script_dir, 'config.json')
 
 # Argument parser setup
 parser = argparse.ArgumentParser(description="Freedom Blocking Script")
@@ -45,12 +48,15 @@ def save_configuration(config):
     """Save configuration to a JSON file."""
     with open(config_file_path, 'w') as config_file:
         json.dump(config, config_file)
-    print("Configuration saved to config.json")
+    print(f"Configuration saved to {config_file_path}")
 
 def load_configuration():
     """Load configuration from a JSON file."""
     with open(config_file_path, 'r') as config_file:
-        return json.load(config_file)
+        config = json.load(config_file)
+    print(f"Loaded configuration from {config_file_path}:")
+    print(json.dumps(config, indent=4))
+    return config
 
 def login_to_freedom(driver):
     """Perform login on the Freedom website."""
@@ -90,8 +96,6 @@ def login_to_freedom(driver):
             print("No specific error message found.")
         
         return False
-
-
 
 def gather_selection(driver, config, selection_type, container):
     """Gather and select items such as blocklists or devices."""
@@ -144,6 +148,7 @@ def set_duration(driver, total_minutes):
         
 
 def run_configuration_setup(driver, config):
+    """Run the configuration setup process."""
     
     # Blocklist selection
     blocklist_div = WebDriverWait(driver, 30).until(
@@ -194,9 +199,6 @@ def run_configuration_setup(driver, config):
 
 # Main Execution Logic
 
-# Configuration file path
-config_file_path = 'config.json'
-
 if os.path.exists(config_file_path):
     try:
         config = load_configuration()
@@ -205,7 +207,7 @@ if os.path.exists(config_file_path):
         config = {}
 else:
     config = {}
-
+    print(f"No configuration file found at {config_file_path}. Starting with an empty configuration.")
 
 try:
     if login_to_freedom(driver):
@@ -213,6 +215,9 @@ try:
 
         # Check for existing configuration
         if os.path.exists(config_file_path) and not args.reconfigure and not args.adjust_time:
+
+            print(f"Using configuration from {config_file_path}:")
+            print(json.dumps(config, indent=4))
 
             # Select blocklists
             blocklist_div = driver.find_element(By.CLASS_NAME, 'blocklist-checklist')
