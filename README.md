@@ -13,12 +13,14 @@ This script allows you to automate the process of starting Freedom sessions usin
 - Adjust session duration without reconfiguring blocklists and devices
 - Flexible WebDriver configuration (local or remote)
 - Detailed logging
+- Multiple fallback strategies for Chrome binary detection
 
 ## Requirements
 
 - Python 3.6+
-- Selenium
+- Selenium 4.0.0+
 - A Freedom.to account
+- Google Chrome (for local execution)
 
 ## Installation
 
@@ -52,6 +54,7 @@ The script uses two configuration files:
      {
        "driver_type": "local",
        "remote_url": "http://localhost:4444/wd/hub",
+       "chrome_binary_path": "",
        "browser_logging": false,
        "log_path": "~/freedom_script.log",
        "config_path": "~/freedom_config.json"
@@ -98,7 +101,7 @@ python trigger_freedom_session.py --adjust-time 30
 
 This sets the session duration to 30 minutes.
 
-### Using with Selenium Grid
+## Using with Selenium Grid
 
 If you want to use a remote Selenium Grid instead of a local browser:
 
@@ -106,7 +109,7 @@ If you want to use a remote Selenium Grid instead of a local browser:
    ```json
    {
      "driver_type": "remote",
-     "remote_url": "http://localhost:4444/wd/hub"
+     "remote_url": "http://your-selenium-grid-ip:4444/wd/hub"
    }
    ```
 
@@ -114,6 +117,48 @@ If you want to use a remote Selenium Grid instead of a local browser:
    ```
    python trigger_freedom_session.py
    ```
+
+## Troubleshooting
+
+### Cannot find Chrome binary
+
+If you encounter the error "Cannot find Chrome binary", try the following solutions:
+
+1. **Specify Chrome binary path in settings:**
+   ```json
+   {
+     "chrome_binary_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+   }
+   ```
+
+2. **Use a Selenium Grid:** Set up a Docker-based Selenium Grid:
+   ```yaml
+   selenium-chrome-standalone:
+     image: selenium/standalone-chrome:latest
+     container_name: selenium-chrome-standalone
+     restart: unless-stopped
+     shm_size: 2gb
+     ports:
+       - "4446:4444"  # Bind to all interfaces
+     volumes:
+       - /dev/shm:/dev/shm
+   ```
+
+   Then update your settings to use it:
+   ```json
+   {
+     "driver_type": "remote",
+     "remote_url": "http://localhost:4446/wd/hub"
+   }
+   ```
+
+### Chrome version mismatch
+
+If you encounter errors about Chrome version mismatches:
+
+1. Update your Chrome browser to the latest version
+2. Ensure webdriver-manager is updated (`pip install --upgrade webdriver-manager`)
+3. Try using Selenium's built-in driver manager by removing webdriver-manager
 
 ## License
 

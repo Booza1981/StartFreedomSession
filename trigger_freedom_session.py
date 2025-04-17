@@ -27,6 +27,10 @@ def setup_logging(log_path=None):
     )
     return logging.getLogger(__name__)
 
+# Initialize a basic logger for use before the main logger is set up
+logging.basicConfig(level=logging.INFO)
+basic_logger = logging.getLogger("freedom_basic")
+
 def initialize_webdriver(settings):
     """Initialize WebDriver based on configuration."""
     options = webdriver.ChromeOptions()
@@ -43,6 +47,12 @@ def initialize_webdriver(settings):
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-extensions")
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    
+    # Check for custom Chrome binary path in settings
+    chrome_binary = settings.get('chrome_binary_path')
+    if chrome_binary:
+        basic_logger.info(f"Using custom Chrome binary path: {chrome_binary}")
+        options.binary_location = chrome_binary
     
     if settings.get('browser_logging', False):
         options.add_argument("--enable-logging")
@@ -61,17 +71,49 @@ def initialize_webdriver(settings):
                 options=options
             )
         else:
-            # Use local ChromeDriver
+            # Use local ChromeDriver with multiple fallback strategies
             basic_logger.info("Using local ChromeDriver")
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-            except ImportError:
-                logger.warning("webdriver_manager not installed, using system ChromeDriver")
-                service = Service()
-                
-            driver = webdriver.Chrome(service=service, options=options)
             
+            try:
+                # First try using Selenium's built-in manager (Selenium 4.6.0+)
+                driver = webdriver.Chrome(options=options)
+                basic_logger.info("Used Selenium's built-in driver manager")
+            except Exception as local_error:
+                basic_logger.warning(f"Selenium's built-in manager failed: {local_error}")
+                
+                try:
+                    # Fall back to webdriver-manager if available
+                    from webdriver_manager.chrome import ChromeDriverManager
+                    service = Service(ChromeDriverManager().install())
+                    driver = webdriver.Chrome(service=service, options=options)
+                    basic_logger.info("Used webdriver-manager fallback")
+                except Exception as wdm_error:
+                    basic_logger.warning(f"webdriver-manager failed: {wdm_error}")
+                    
+                    # Try to detect Chrome in common locations
+                    chrome_locations = [
+                        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                        "/usr/bin/google-chrome",
+                        "/usr/bin/google-chrome-stable",
+                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                    ]
+                    
+                    for location in chrome_locations:
+                        if os.path.exists(location):
+                            basic_logger.info(f"Found Chrome at {location}")
+                            options.binary_location = location
+                            break
+                        
+                    try:
+                        service = Service()
+                        driver = webdriver.Chrome(service=service, options=options)
+                        basic_logger.info("Used system ChromeDriver with detected Chrome binary")
+                    except Exception as e:
+                        basic_logger.error(f"All local ChromeDriver attempts failed. Final error: {e}")
+                        basic_logger.info("Consider using remote WebDriver or specifying chrome_binary_path in settings")
+                        raise
+        
         basic_logger.info("WebDriver initialized successfully")
         driver.implicitly_wait(10)
         return driver
@@ -79,15 +121,12 @@ def initialize_webdriver(settings):
         basic_logger.error(f"Failed to initialize WebDriver: {e}")
         raise
 
-# Initialize a basic logger for use before the main logger is set up
-logging.basicConfig(level=logging.INFO)
-basic_logger = logging.getLogger("freedom_basic")
-
 def load_settings(settings_file=None):
     """Load settings from JSON file or create default if not exists."""
     default_settings = {
         "driver_type": "local",  # 'local' or 'remote'
         "remote_url": "http://localhost:4444/wd/hub",
+        "chrome_binary_path": "",  # Set this to your Chrome executable path if needed
         "browser_logging": False,
         "log_path": "~/freedom_script.log",
         "config_path": "~/freedom_config.json"
