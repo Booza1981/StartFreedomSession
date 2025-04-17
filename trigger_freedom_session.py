@@ -11,220 +11,340 @@ from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 import logging
 from pathlib import Path
+import time # For cookie handling delays
+from datetime import datetime # For screenshot timestamp
 
-def setup_logging(log_path=None):
-    """Set up logging configuration."""
-    if log_path is None:
-        log_path = os.path.expanduser("~/freedom_script.log")
-    
+# --- Determine the script's directory & Default Paths ---
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_LOG_FILENAME = "freedom_script.log"
+DEFAULT_CONFIG_FILENAME = ".freedom_config.json" # Hidden file convention
+DEFAULT_SETTINGS_FILENAME = ".freedom_settings.json" # Hidden file convention
+LOGS_DIR_NAME = "logs"
+# ---
+
+# Initialize a basic logger FIRST for use during setup
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+basic_logger = logging.getLogger("freedom_basic")
+basic_logger.info(f"Script directory determined as: {SCRIPT_DIR}")
+
+# --- Path Resolution Helper ---
+def resolve_path(path_str, base_dir, ensure_parent_exists=False):
+    """Expands '~', resolves path relative to base_dir if not absolute,
+       and optionally ensures parent directory exists."""
+    if not path_str:
+        return None
+    path = Path(os.path.expanduser(str(path_str)))
+    if not path.is_absolute():
+        path = base_dir / path
+    resolved_path = path.resolve()
+
+    if ensure_parent_exists:
+        try:
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            basic_logger.error(f"Could not create directory {resolved_path.parent}: {e}")
+            # Allow function to return path, calling code should handle failure if needed
+
+    return resolved_path
+
+# --- Logging Setup ---
+def setup_logging(log_path_setting=None):
+    """Set up logging configuration, defaulting to script directory's logs sub-directory."""
+    if log_path_setting:
+        log_path = resolve_path(log_path_setting, SCRIPT_DIR, ensure_parent_exists=True)
+    else:
+        # Default log file path is now in logs sub-directory
+        log_path = resolve_path(LOGS_DIR_NAME + "/" + DEFAULT_LOG_FILENAME, SCRIPT_DIR, ensure_parent_exists=True)
+
+    if not log_path:
+        print("ERROR: Could not determine or create log path. Logging disabled.", file=sys.stderr)
+        logging.basicConfig(level=logging.CRITICAL, handlers=[logging.NullHandler()])
+        return logging.getLogger(__name__) # Return a non-functional logger
+
+    # Configure the root logger
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', # Added %(name)s
         handlers=[
             logging.FileHandler(log_path),
-            logging.StreamHandler(sys.stdout)
-        ]
+            logging.StreamHandler(sys.stdout) # Keep console output
+        ],
+        force=True # Overwrite basicConfig potentially called implicitly
     )
-    return logging.getLogger(__name__)
+    logger = logging.getLogger(__name__) # Get logger for this module
+    logger.info(f"Logging configured. Log file: {log_path}")
+    return logger
 
-# Initialize a basic logger for use before the main logger is set up
-logging.basicConfig(level=logging.INFO)
-basic_logger = logging.getLogger("freedom_basic")
+# --- Settings Loading ---
+def load_settings(settings_arg=None):
+    """Load settings, defaulting paths relative to script directory."""
+    # Defaults use simple filenames, resolved later relative to SCRIPT_DIR
+    default_settings = {
+        "driver_type": "local",
+        "remote_url": "http://localhost:4444/wd/hub",
+        "chrome_binary_path": "",
+        "browser_logging": False,
+        "log_path": LOGS_DIR_NAME + "/" + DEFAULT_LOG_FILENAME, # Default to logs subdir
+        "config_path": DEFAULT_CONFIG_FILENAME
+    }
 
+    # Determine the target settings file path
+    if settings_arg:
+        # Resolve argument relative to CWD if not absolute
+        settings_path = resolve_path(settings_arg, Path.cwd())
+        basic_logger.info(f"Using settings file specified via argument: {settings_path}")
+    else:
+        # Default settings file path relative to the script directory
+        settings_path = SCRIPT_DIR / DEFAULT_SETTINGS_FILENAME
+        basic_logger.info(f"No settings file specified, using default: {settings_path}")
+
+    settings = {}
+    if settings_path and settings_path.exists(): # Check if path resolved and exists
+        basic_logger.info(f"Loading settings from: {settings_path}")
+        try:
+            with open(settings_path, 'r') as f:
+                settings = json.load(f)
+            basic_logger.info("Settings loaded successfully.")
+        except json.JSONDecodeError as e:
+            basic_logger.error(f"Error reading JSON from {settings_path}: {e}. Using default settings.")
+            settings = default_settings # Fallback to defaults
+        except OSError as read_e:
+             basic_logger.error(f"Could not read settings file {settings_path}: {read_e}. Using default settings.")
+             settings = default_settings # Fallback
+
+    else:
+        basic_logger.info(f"Settings file not found or path invalid. Using default settings.")
+        settings = default_settings
+        # Save default settings to the determined default path if possible
+        default_save_path = SCRIPT_DIR / DEFAULT_SETTINGS_FILENAME
+        try:
+            default_save_path.parent.mkdir(parents=True, exist_ok=True) # Ensure script dir exists
+            with open(default_save_path, 'w') as f:
+                json.dump(settings, f, indent=4)
+            basic_logger.info(f"Created default settings file at {default_save_path}")
+        except OSError as e:
+            basic_logger.error(f"Could not create default settings file at {default_save_path}: {e}")
+
+    # --- Ensure all paths in settings are absolute relative to SCRIPT_DIR ---
+    final_settings = default_settings.copy() # Start with defaults
+    final_settings.update(settings)          # Override with loaded settings
+
+    paths_to_resolve = ['log_path', 'config_path', 'chrome_binary_path']
+    for key in paths_to_resolve:
+        path_value = final_settings.get(key)
+        if path_value:
+            # Ensure log/config parent dirs exist when resolving
+            needs_parent = key in ['log_path', 'config_path']
+            resolved = resolve_path(path_value, SCRIPT_DIR, ensure_parent_exists=needs_parent)
+            if resolved:
+                basic_logger.info(f"Resolved path for '{key}': '{path_value}' -> '{resolved}'")
+                final_settings[key] = str(resolved) # Store as string
+            else:
+                 basic_logger.warning(f"Could not resolve path for key '{key}' with value '{path_value}'.")
+                 final_settings[key] = str(path_value) # Keep original
+        else:
+            final_settings[key] = "" # Keep empty
+
+    return final_settings
+
+
+# --- WebDriver Initialization (Original Logic) ---
 def initialize_webdriver(settings):
     """Initialize WebDriver based on configuration."""
+    logger = logging.getLogger(__name__) # Get configured logger
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920x1080")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    
-    # Suppress WebGL warnings and other noise
+
     options.add_argument("--enable-unsafe-swiftshader")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-webgl")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-extensions")
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
-    
-    # Check for custom Chrome binary path in settings
+
     chrome_binary = settings.get('chrome_binary_path')
     if chrome_binary:
-        basic_logger.info(f"Using custom Chrome binary path: {chrome_binary}")
-        options.binary_location = chrome_binary
-    
+        logger.info(f"Using custom Chrome binary path: {chrome_binary}")
+        options.binary_location = str(chrome_binary) # Use resolved path
+
     if settings.get('browser_logging', False):
         options.add_argument("--enable-logging")
     else:
-        options.add_argument("--log-level=3")  # Suppress console output
-    
+        options.add_argument("--log-level=3")
+
     driver_type = settings.get('driver_type', 'local')
-    
+
     try:
         if driver_type == 'remote':
-            # Use remote WebDriver (Selenium Grid)
             remote_url = settings.get('remote_url', 'http://localhost:4444/wd/hub')
-            basic_logger.info(f"Connecting to remote WebDriver at {remote_url}")
-            driver = webdriver.Remote(
-                command_executor=remote_url,
-                options=options
-            )
+            logger.info(f"Connecting to remote WebDriver at {remote_url}")
+            driver = webdriver.Remote(command_executor=remote_url, options=options)
         else:
-            # Use local ChromeDriver with multiple fallback strategies
-            basic_logger.info("Using local ChromeDriver")
-            
+            logger.info("Using local ChromeDriver")
             try:
-                # First try using Selenium's built-in manager (Selenium 4.6.0+)
                 driver = webdriver.Chrome(options=options)
-                basic_logger.info("Used Selenium's built-in driver manager")
+                logger.info("Used Selenium's built-in driver manager")
             except Exception as local_error:
-                basic_logger.warning(f"Selenium's built-in manager failed: {local_error}")
-                
+                logger.warning(f"Selenium's built-in manager failed: {local_error}")
                 try:
-                    # Fall back to webdriver-manager if available
                     from webdriver_manager.chrome import ChromeDriverManager
                     service = Service(ChromeDriverManager().install())
                     driver = webdriver.Chrome(service=service, options=options)
-                    basic_logger.info("Used webdriver-manager fallback")
+                    logger.info("Used webdriver-manager fallback")
                 except Exception as wdm_error:
-                    basic_logger.warning(f"webdriver-manager failed: {wdm_error}")
-                    
-                    # Try to detect Chrome in common locations
-                    chrome_locations = [
-                        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-                        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-                        "/usr/bin/google-chrome",
-                        "/usr/bin/google-chrome-stable",
-                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                    ]
-                    
-                    for location in chrome_locations:
-                        if os.path.exists(location):
-                            basic_logger.info(f"Found Chrome at {location}")
-                            options.binary_location = location
-                            break
-                        
+                    logger.warning(f"webdriver-manager failed: {wdm_error}")
                     try:
                         service = Service()
                         driver = webdriver.Chrome(service=service, options=options)
-                        basic_logger.info("Used system ChromeDriver with detected Chrome binary")
-                    except Exception as e:
-                        basic_logger.error(f"All local ChromeDriver attempts failed. Final error: {e}")
-                        basic_logger.info("Consider using remote WebDriver or specifying chrome_binary_path in settings")
+                        logger.info("Used system ChromeDriver")
+                    except Exception as path_error:
+                        logger.error(f"All local ChromeDriver attempts failed. Final error: {path_error}")
                         raise
-        
-        basic_logger.info("WebDriver initialized successfully")
-        driver.implicitly_wait(10)
+
+        logger.info("WebDriver initialized successfully")
+        driver.implicitly_wait(10) # Keep implicit wait from original
         return driver
     except Exception as e:
-        basic_logger.error(f"Failed to initialize WebDriver: {e}")
+        logger.error(f"Failed to initialize WebDriver: {e}")
         raise
 
-def load_settings(settings_file=None):
-    """Load settings from JSON file or create default if not exists."""
-    default_settings = {
-        "driver_type": "local",  # 'local' or 'remote'
-        "remote_url": "http://localhost:4444/wd/hub",
-        "chrome_binary_path": "",  # Set this to your Chrome executable path if needed
-        "browser_logging": False,
-        "log_path": "~/freedom_script.log",
-        "config_path": "~/freedom_config.json"
-    }
-    
-    if settings_file is None:
-        settings_file = os.path.expanduser("~/.freedom_settings.json")
-    
-    settings_path = Path(settings_file)
-    
-    if settings_path.exists():
-        with open(settings_path, 'r') as f:
-            settings = json.load(f)
-            # Update with any missing default settings
-            for key, value in default_settings.items():
-                if key not in settings:
-                    settings[key] = value
-    else:
-        settings = default_settings
-        # Save default settings
-        with open(settings_path, 'w') as f:
-            json.dump(settings, f, indent=4)
-        basic_logger.info(f"Created default settings file at {settings_path}")
-    
-    # Expand any ~ in paths
-    for key in ['log_path', 'config_path']:
-        if key in settings:
-            settings[key] = os.path.expanduser(settings[key])
-            
-    return settings
 
+# --- Freedom Session Class ---
 class FreedomSession:
     """Class to manage Freedom sessions."""
-    
+
     def __init__(self, settings=None):
         """Initialize with settings."""
+        # Use basic_logger until full logger is confirmed available
+        current_logger = logging.getLogger(__name__) if logging.getLogger(__name__).hasHandlers() else basic_logger
+
         if settings is None:
+            current_logger.warning("FreedomSession initialized without pre-loaded settings. Loading defaults.")
             settings = load_settings()
         self.settings = settings
         self.driver = None
-        self.config_file_path = self.settings.get('config_path', os.path.expanduser("~/freedom_config.json"))
-        self.config = self.load_configuration()
-    
+
+        # Get the resolved, absolute path for the config file from settings
+        self.config_file_path = self.settings.get('config_path')
+        
+        # Use resolved, absolute path from settings
+        self.config = self.load_configuration() # Load config using the path
+
     def load_configuration(self):
-        """Load configuration from a JSON file."""
+        """Load configuration from the absolute JSON file path."""
+        logger = logging.getLogger(__name__)
+        if not self.config_file_path:
+             logger.error("Configuration file path is not set in settings.")
+             return {}
+
+        config_path_obj = Path(self.config_file_path)
         try:
-            if os.path.exists(self.config_file_path):
-                with open(self.config_file_path, 'r') as config_file:
+            if config_path_obj.exists():
+                with open(config_path_obj, 'r') as config_file:
                     config = json.load(config_file)
-                logger.info(f"Loaded configuration from {self.config_file_path}")
+                logger.info(f"Loaded configuration from {config_path_obj}")
                 return config
             else:
-                logger.info(f"No configuration file found at {self.config_file_path}. Starting with an empty configuration.")
+                logger.info(f"No configuration file found at {config_path_obj}. Starting with an empty configuration.")
                 return {}
         except json.JSONDecodeError as e:
-            logger.error(f"Error loading configuration file: {e}")
+            logger.error(f"Error reading JSON from configuration file {config_path_obj}: {e}")
             return {}
-    
+        except OSError as e:
+             logger.error(f"Error accessing configuration file {config_path_obj}: {e}")
+             return {}
+
     def save_configuration(self, config):
-        """Save configuration to a JSON file."""
-        with open(self.config_file_path, 'w') as config_file:
-            json.dump(config, config_file, indent=4)
-        logger.info(f"Configuration saved to {self.config_file_path}")
-        
+        """Save configuration to the absolute JSON file path."""
+        logger = logging.getLogger(__name__)
+        if not self.config_file_path:
+             logger.error("Cannot save configuration, file path is not set.")
+             return
+
+        config_path_obj = Path(self.config_file_path)
+        try:
+            # Parent directory should exist due to resolve_path in load_settings
+            with open(config_path_obj, 'w') as config_file:
+                json.dump(config, config_file, indent=4)
+            logger.info(f"Configuration saved to {config_path_obj}")
+        except OSError as e:
+             logger.error(f"Could not save configuration file to {config_path_obj}: {e}")
+        except TypeError as e:
+            logger.error(f"Error serializing configuration to JSON: {e}")
+
+
+    # --- Original Selenium Interaction Methods ---
     def login(self, username, password):
-        """Perform login on the Freedom website."""
-        if self.driver is None:
-            self.driver = initialize_webdriver(self.settings)
-            
+        """Perform login on the Freedom website using original logic."""
+        logger = logging.getLogger(__name__) # Get configured logger
+        # Driver initialization now happens *before* login is called in main()
+        if not self.driver:
+             logger.error("Login called but WebDriver is not initialized.")
+             # Attempt to initialize as fallback - might be better to fail in main
+             self.driver = initialize_webdriver(self.settings)
+             if not self.driver: return False
+
         logger.info("Opening website...")
         self.driver.get("https://freedom.to/")
-        
-        logger.info("Clicking Log In...")
-        self.driver.find_element(By.LINK_TEXT, "Log In").click()
-        
-        logger.info("Entering credentials...")
-        self.driver.find_element(By.ID, "session_email").clear()
-        self.driver.find_element(By.ID, "session_email").send_keys(username)
-        
-        self.driver.find_element(By.ID, "session_password").clear()
-        self.driver.find_element(By.ID, "session_password").send_keys(password)
-        
-        logger.info("Submitting login form...")
-        self.driver.find_element(By.ID, "login-form").submit()
-        
-        # Confirm successful login
-        try:
-            blocklist_div = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, 'blocklist-checklist'))
+
+        try: # Wrap core login steps
+            logger.info("Clicking Log In...")
+            # Allow potential NoSuchElementException etc. if page structure changes
+            self.driver.find_element(By.LINK_TEXT, "Log In").click()
+            time.sleep(1) # Small pause after click, might help login form appear
+
+            logger.info("Entering credentials...")
+            # Add waits for fields to be present before interacting
+            email_field = WebDriverWait(self.driver, 10).until(
+                 EC.presence_of_element_located((By.ID, "session_email"))
             )
-            logger.info("Login successful.")
+            email_field.clear()
+            email_field.send_keys(username)
+
+            password_field = WebDriverWait(self.driver, 10).until(
+                 EC.presence_of_element_located((By.ID, "session_password"))
+            )
+            password_field.clear()
+            password_field.send_keys(password)
+
+            logger.info("Submitting login form...")
+            self.driver.find_element(By.ID, "login-form").submit() # Original submit action
+
+            # Confirm successful login using the original check
+            logger.info("Waiting for dashboard check element...")
+            WebDriverWait(self.driver, 10).until(
+                 EC.presence_of_element_located((By.CLASS_NAME, 'blocklist-checklist'))
+            )
+            logger.info("Login successful (original check passed).")
+
             return True
+            
+
         except Exception as e:
-            logger.error(f"Login failed: {e}")
+            # Broader exception handling for timeouts, element not found etc.
+            logger.error(f"Login process failed: {e}", exc_info=True) # Log traceback
+            # --- Screenshot on error ---
+            try:
+                logs_dir = resolve_path(LOGS_DIR_NAME, SCRIPT_DIR, ensure_parent_exists=True)
+                if logs_dir and self.driver:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    screenshot_path = logs_dir / f"login_error_{timestamp}.png"
+                    self.driver.save_screenshot(str(screenshot_path))
+                    logger.info(f"Screenshot saved to {screenshot_path}")
+                elif not self.driver:
+                     logger.warning("WebDriver not available for screenshot.")
+            except Exception as screen_err:
+                logger.error(f"Failed to save screenshot: {screen_err}")
+            # --- End Screenshot ---
             return False
-    
+
     def gather_selection(self, selection_type, container):
         """Gather and select items such as blocklists or devices."""
+        logger = logging.getLogger(__name__)
         logger.info(f"Gathering {selection_type}...")
         
         # Find all checkbox rows in the container
@@ -301,6 +421,7 @@ class FreedomSession:
     
     def set_duration(self, total_minutes):
         """Set the duration for the blocking session."""
+        logger = logging.getLogger(__name__)
         if total_minutes <= 0:
             logger.error("Duration must be a positive number of minutes.")
             return False
@@ -322,6 +443,7 @@ class FreedomSession:
     
     def configure(self):
         """Run the configuration setup process."""
+        logger = logging.getLogger(__name__)
         try:
             # Blocklist selection
             blocklist_div = WebDriverWait(self.driver, 30).until(
@@ -372,6 +494,7 @@ class FreedomSession:
     
     def start_session(self):
         """Start a session with existing configuration."""
+        logger = logging.getLogger(__name__)
         try:
             if not self.config:
                 logger.error("No configuration found. Please run --reconfigure first.")
@@ -420,6 +543,7 @@ class FreedomSession:
     
     def close(self):
         """Close the browser and clean up."""
+        logger = logging.getLogger(__name__)
         if self.driver:
             try:
                 self.driver.quit()
@@ -428,71 +552,110 @@ class FreedomSession:
                 logger.error(f"Error closing browser: {e}")
 
 
+# --- Main Execution Block ---
 def main():
-    """Main function to run the script."""
-    parser = argparse.ArgumentParser(description="Freedom Blocking Script")
+    """Main function to parse arguments and run the script."""
+    pre_logger = logging.getLogger("freedom_pre") # Basic logger for early messages
+
+    parser = argparse.ArgumentParser(
+        description="Automate Freedom.to session start or configuration.",
+        epilog=f"Default files are stored relative to script directory: {SCRIPT_DIR}"
+    )
     parser.add_argument('--reconfigure', action='store_true', help="Reconfigure blocklists, devices, and duration.")
     parser.add_argument('--adjust-time', type=int, help="Adjust the duration of the block (in minutes) while keeping the other settings.")
     parser.add_argument('--settings', type=str, help="Path to settings file. Creates default if not exists.")
     args = parser.parse_args()
-    
-    # Load settings first
+
+    # --- Setup ---
     settings = load_settings(args.settings)
-    
-    # Setup logging
-    global logger
-    logger = setup_logging(settings.get('log_path'))
-    
-    # Replace the basic logger with the configured one
-    global basic_logger
-    basic_logger = logger
-    
-    # Load environment variables from .env file
-    load_dotenv()
-    
-    # Get credentials
+    logger = setup_logging(settings.get('log_path')) # Assign configured logger
+
+    if load_dotenv(): logger.info(".env file loaded.")
+    else: logger.info("No .env file found or not loaded.")
+
+    logger.info("Retrieving credentials...")
     username = os.getenv('FREEDOM_USERNAME')
     password = os.getenv('FREEDOM_PASSWORD')
-    
     if not username or not password:
-        logger.error("Freedom credentials not found. Please set FREEDOM_USERNAME and FREEDOM_PASSWORD in .env file.")
+        logger.critical("Credentials not found in environment/.env file.")
         return 1
-    
-    # Initialize Freedom session
-    freedom = FreedomSession(settings)
-    
+    logger.info("Credentials retrieved successfully.") # Added success log
+
+    # --- Initialize Session ---
+    freedom = None
+    exit_code = 1
+
     try:
-        # Login to Freedom
-        if not freedom.login(username, password):
-            logger.error("Login failed. Please check your credentials.")
+        logger.info("Initializing Freedom session object...")
+        freedom = FreedomSession(settings) # Initializes config etc.
+
+        logger.info("Initializing WebDriver...")
+        freedom.driver = initialize_webdriver(freedom.settings) # Init WebDriver
+        if not freedom.driver:
+            logger.critical("Failed to initialize WebDriver.")
             return 1
-        
-        # Handle adjust time
-        if args.adjust_time:
-            freedom.config['duration'] = args.adjust_time
-            freedom.save_configuration(freedom.config)
-            logger.info(f"Duration adjusted to {args.adjust_time} minutes")
-        
-        # Run the requested operation
+
+        # --- Perform Form Login Directly ---
+        logger.info("Attempting form login...")
+        login_successful = freedom.login(username, password) # Call original login
+        # --- End Form Login ---
+
+        if not login_successful:
+            logger.error("Login failed. Cannot proceed.")
+            # Screenshot happens inside login() on failure
+            return 1 # Exit if login failed
+
+        # --- Perform Action (Reconfigure or Start Session) ---
         if args.reconfigure:
-            logger.info("Running configuration setup...")
-            if not freedom.configure():
-                logger.error("Configuration setup failed.")
-                return 1
+            logger.info("Starting reconfiguration process...")
+            # Use freedom.configure() which returns True/False
+            if freedom.configure():
+                 exit_code = 0
+            else:
+                 logger.error("Reconfiguration process failed.")
+                 exit_code = 1 # Ensure error code if configure fails
         else:
-            logger.info("Starting session with saved configuration...")
-            if not freedom.start_session():
-                logger.error("Failed to start session.")
-                return 1
-        
-        return 0
+            # Default action: Start session (potentially adjusting time)
+            if args.adjust_time:
+                 if args.adjust_time > 0:
+                      logger.info(f"Adjusting session duration to {args.adjust_time} minutes.")
+                      freedom.config['duration'] = args.adjust_time
+                      # Optional: Save adjusted time back to config file?
+                      # freedom.save_configuration(freedom.config)
+                 else:
+                      logger.error("Invalid --adjust-time value. Must be positive.")
+                      return 1 # Exit
+
+            logger.info("Attempting to start session...")
+            # Use freedom.start_session() which returns True/False
+            if freedom.start_session():
+                 exit_code = 0
+            else:
+                 logger.error("Failed to start session.")
+                 exit_code = 1 # Ensure error code if start fails
+
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return 1
+        # Log critical errors happening outside specific method calls
+        logger.critical(f"An unexpected critical error occurred in main: {e}", exc_info=True)
+        exit_code = 1
+        # Final screenshot attempt
+        if freedom and freedom.driver:
+             try:
+                  logs_dir = resolve_path(LOGS_DIR_NAME, SCRIPT_DIR, ensure_parent_exists=True)
+                  if logs_dir:
+                       timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                       final_error_path = logs_dir / f"final_error_{timestamp}.png"
+                       freedom.driver.save_screenshot(str(final_error_path))
+                       logger.info(f"Final error screenshot saved to {final_error_path}")
+             except Exception as screen_err: logger.error(f"Failed to save final error screenshot: {screen_err}")
     finally:
-        freedom.close()
+        logger.info("Initiating cleanup...")
+        if freedom: freedom.close()
+        else: logger.info("FreedomSession object not created/valid, no browser to close.")
+        logger.info(f"Script finished with exit code {exit_code}.")
+
+    return exit_code
+
 
 
 if __name__ == "__main__":
