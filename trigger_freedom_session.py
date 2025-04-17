@@ -36,6 +36,14 @@ def initialize_webdriver(settings):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     
+    # Suppress WebGL warnings and other noise
+    options.add_argument("--enable-unsafe-swiftshader")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-webgl")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-extensions")
+    options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    
     if settings.get('browser_logging', False):
         options.add_argument("--enable-logging")
     else:
@@ -47,14 +55,14 @@ def initialize_webdriver(settings):
         if driver_type == 'remote':
             # Use remote WebDriver (Selenium Grid)
             remote_url = settings.get('remote_url', 'http://localhost:4444/wd/hub')
-            logger.info(f"Connecting to remote WebDriver at {remote_url}")
+            basic_logger.info(f"Connecting to remote WebDriver at {remote_url}")
             driver = webdriver.Remote(
                 command_executor=remote_url,
                 options=options
             )
         else:
             # Use local ChromeDriver
-            logger.info("Using local ChromeDriver")
+            basic_logger.info("Using local ChromeDriver")
             try:
                 from webdriver_manager.chrome import ChromeDriverManager
                 service = Service(ChromeDriverManager().install())
@@ -64,12 +72,16 @@ def initialize_webdriver(settings):
                 
             driver = webdriver.Chrome(service=service, options=options)
             
-        logger.info("WebDriver initialized successfully")
+        basic_logger.info("WebDriver initialized successfully")
         driver.implicitly_wait(10)
         return driver
     except Exception as e:
-        logger.error(f"Failed to initialize WebDriver: {e}")
+        basic_logger.error(f"Failed to initialize WebDriver: {e}")
         raise
+
+# Initialize a basic logger for use before the main logger is set up
+logging.basicConfig(level=logging.INFO)
+basic_logger = logging.getLogger("freedom_basic")
 
 def load_settings(settings_file=None):
     """Load settings from JSON file or create default if not exists."""
@@ -98,7 +110,7 @@ def load_settings(settings_file=None):
         # Save default settings
         with open(settings_path, 'w') as f:
             json.dump(settings, f, indent=4)
-        logger.info(f"Created default settings file at {settings_path}")
+        basic_logger.info(f"Created default settings file at {settings_path}")
     
     # Expand any ~ in paths
     for key in ['log_path', 'config_path']:
@@ -391,6 +403,10 @@ def main():
     # Setup logging
     global logger
     logger = setup_logging(settings.get('log_path'))
+    
+    # Replace the basic logger with the configured one
+    global basic_logger
+    basic_logger = logger
     
     # Load environment variables from .env file
     load_dotenv()
