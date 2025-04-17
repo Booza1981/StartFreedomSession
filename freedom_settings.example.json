@@ -1,0 +1,27 @@
+{
+    "/* General settings explanation */": "This is an example settings file with comments. Delete all comment lines in your actual settings file.",
+    
+    "/* Choose driver type */": "Use 'local' for running Chrome on your machine, 'remote' for Selenium Grid",
+    "driver_type": "local",
+    
+    "/* Remote WebDriver URL */": "Only used when driver_type is 'remote', points to your Selenium Grid instance",
+    "remote_url": "http://localhost:4444/wd/hub",
+    
+    "/* Chrome binary path */": "Only for local mode, use this if Chrome isn't found automatically",
+    "chrome_binary_path": "",
+    
+    "/* Examples of chrome_binary_path for different OSes */": {
+        "Windows example": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "Mac example": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "Linux example": "/usr/bin/google-chrome"
+    },
+    
+    "/* Enable detailed browser logs */": "Set to true for debugging browser issues",
+    "browser_logging": false,
+    
+    "/* Log file location */": "Where to store script logs, allows ~ for home directory",
+    "log_path": "~/freedom_script.log",
+    
+    "/* Config file location */": "Where to store your blocklists, devices and duration settings",
+    "config_path": "~/freedom_config.json"
+}

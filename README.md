@@ -49,17 +49,19 @@ The script uses two configuration files:
 
 1. `.freedom_settings.json` - Contains WebDriver and logging settings
    - Created automatically with defaults when not present
-   - Example:
-     ```json
-     {
-       "driver_type": "local",
-       "remote_url": "http://localhost:4444/wd/hub",
-       "chrome_binary_path": "",
-       "browser_logging": false,
-       "log_path": "~/freedom_script.log",
-       "config_path": "~/freedom_config.json"
-     }
-     ```
+   - Example files are provided:
+     - `freedom_settings.example.json` - Detailed explanations for all settings
+     - `freedom_settings.local.example.json` - Example for local Chrome setup
+     - `freedom_settings.remote.example.json` - Example for Selenium Grid setup
+   
+   To use an example file:
+   ```bash
+   # Copy the appropriate example file to your home directory
+   cp freedom_settings.remote.example.json ~/.freedom_settings.json
+   
+   # Or specify it directly when running the script
+   python trigger_freedom_session.py --settings freedom_settings.remote.example.json
+   ```
 
 2. `freedom_config.json` - Contains your selected blocklists, devices, and duration
    - Created when you run the script with `--reconfigure`

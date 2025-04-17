@@ -1,0 +1,8 @@
+{
+    "driver_type": "local",
+    "remote_url": "http://localhost:4444/wd/hub",
+    "chrome_binary_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "browser_logging": false,
+    "log_path": "~/freedom_script.log",
+    "config_path": "~/freedom_config.json"
+}

@@ -1,0 +1,8 @@
+{
+    "driver_type": "remote",
+    "remote_url": "http://192.168.1.236:4446/wd/hub",
+    "chrome_binary_path": "",
+    "browser_logging": false,
+    "log_path": "~/freedom_script.log",
+    "config_path": "~/freedom_config.json"
+}
