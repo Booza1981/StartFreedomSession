@@ -1,6 +1,6 @@
 # StartFreedomSession
 
-A Python script to automate launching Freedom sessions through Selenium.
+A Python script to automate launching Freedom sessions through Selenium. Ideal for quick starts, integration into other workflows, or scheduled tasks. Runs headless by default.
 
 ## Overview
 
@@ -20,7 +20,7 @@ This script allows you to automate the process of starting Freedom sessions usin
 - Python 3.6+
 - Selenium 4.0.0+
 - A Freedom.to account
-- Google Chrome (for local execution)
+- Google Chrome (for local execution) - See [WebDriver Notes](#webdriver-notes) section below for details on local Chrome or remote Selenium Grid setup
 
 ## Installation
 
@@ -68,7 +68,7 @@ The script uses two configuration files:
 
 ## Usage
 
-### First-time setup
+### First-time setup / Reconfigure
 
 Run the script with the `--reconfigure` flag to select your blocklists, devices, and duration:
 
@@ -103,6 +103,13 @@ python trigger_freedom_session.py --adjust-time 30
 
 This sets the session duration to 30 minutes.
 
+### Using a Custom Settings File
+
+If you want to use a different settings file than the default `.freedom_settings.json` in the script directory:
+```
+python trigger_freedom_session.py --settings /path/to/your/custom_settings.json
+```
+
 ## Using with Selenium Grid
 
 If you want to use a remote Selenium Grid instead of a local browser:
@@ -120,47 +127,34 @@ If you want to use a remote Selenium Grid instead of a local browser:
    python trigger_freedom_session.py
    ```
 
-## Troubleshooting
+## Logging & Troubleshooting
 
-### Cannot find Chrome binary
+* **Log File:** Detailed information about the script's execution, including steps, selections, and errors, is logged to `logs/freedom_script.log` within the project directory. Check this file first if you encounter issues.
+* **Error Screenshots:** If the script fails during login or encounters a critical error later, it will attempt to save a screenshot to the `logs/` directory (e.g., `login_error_YYYYMMDD_HHMMSS.png`, `final_error_...`). These can help diagnose problems.
+* **Common Issues:**
+    * **Login Failed:** Double-check credentials in your `.env` file. Ensure Freedom.to is accessible. Check the log file and any screenshots.
+    * **WebDriver Errors:** See the [WebDriver Notes](#webdriver-notes) below. Ensure Chrome/ChromeDriver or your Selenium Grid is set up correctly.
+    * **Element Not Found / Click Intercepted:** Freedom.to website structure might have changed. This could require updating the Selenium selectors (e.g., `By.ID`, `By.CLASS_NAME`, `By.XPATH`) within the `trigger_freedom_session.py` script. Check the log file for details.
 
-If you encounter the error "Cannot find Chrome binary", try the following solutions:
 
-1. **Specify Chrome binary path in settings:**
-   ```json
-   {
-     "chrome_binary_path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-   }
-   ```
+## WebDriver Notes
 
-2. **Use a Selenium Grid:** Set up a Docker-based Selenium Grid:
-   ```yaml
-   selenium-chrome-standalone:
-     image: selenium/standalone-chrome:latest
-     container_name: selenium-chrome-standalone
-     restart: unless-stopped
-     shm_size: 2gb
-     ports:
-       - "4446:4444"  # Bind to all interfaces
-     volumes:
-       - /dev/shm:/dev/shm
-   ```
+The script uses Selenium to control a web browser. Configuration is via `.freedom_settings.json`.
 
-   Then update your settings to use it:
-   ```json
-   {
-     "driver_type": "remote",
-     "remote_url": "http://localhost:4446/wd/hub"
-   }
-   ```
+* **Local Driver (`driver_type: "local"`):**
+    * Requires Google Chrome to be installed on the machine running the script.
+    * The script attempts to automatically download and manage the correct `chromedriver` using Selenium's built-in *Selenium Manager* or the `webdriver-manager` library (if installed).
+    * If automatic management fails (e.g., due to network restrictions or permissions), you may need to:
+        1.  Download the `chromedriver` executable matching your installed Chrome version from the [official ChromeDriver website](https://chromedriver.chromium.org/downloads).
+        2.  Place the executable somewhere the script can find it (e.g., in the script directory or a location listed in your system's `PATH` environment variable).
+        3.  Alternatively, you can specify the full path to your *Google Chrome* executable (not chromedriver) using the `chrome_binary_path` setting in `.freedom_settings.json` if Selenium has trouble finding it.
 
-### Chrome version mismatch
+* **Remote Driver (`driver_type: "remote"`):**
+    * Requires a separate Selenium Grid, Selenoid, or other WebDriver-compatible server running.
+    * Set `driver_type` to `"remote"` and `remote_url` to the correct endpoint (e.g., `"http://your-grid-ip:4444/wd/hub"`) in `.freedom_settings.json`.
+    * The remote server/node must have Google Chrome available for the script to use.
 
-If you encounter errors about Chrome version mismatches:
 
-1. Update your Chrome browser to the latest version
-2. Ensure webdriver-manager is updated (`pip install --upgrade webdriver-manager`)
-3. Try using Selenium's built-in driver manager by removing webdriver-manager
 
 ## License
 
