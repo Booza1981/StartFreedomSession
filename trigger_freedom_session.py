@@ -294,8 +294,13 @@ class FreedomSession:
         try: # Wrap core login steps
             logger.info("Clicking Log In...")
             # Allow potential NoSuchElementException etc. if page structure changes
-            self.driver.find_element(By.LINK_TEXT, "Log In").click()
+            self.driver.find_element(By.CSS_SELECTOR, "a.nav_link-login").click()
             time.sleep(1) # Small pause after click, might help login form appear
+
+            # Login now opens a new tab, so we need to switch to it and then continue with the form filling
+            logger.info("Switching to new login tab...")
+            # self.driver.window_handles is a list of all open tabs. [-1] gets the newest one.
+            self.driver.switch_to.window(self.driver.window_handles[-1])
 
             logger.info("Entering credentials...")
             # Add waits for fields to be present before interacting
